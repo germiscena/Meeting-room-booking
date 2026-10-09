@@ -6,20 +6,25 @@ import { QueryProvider } from './app/providers/QueryProvider';
 import './app/index.css';
 
 async function enableMocking() {
-  const isDev = import.meta.env.DEV;
-  const enableMocks = import.meta.env.VITE_ENABLE_MOCKS === 'true' || isDev;
-
-  if (!enableMocks) {
+  // If an external backend API URL is configured or mocks are explicitly disabled, bypass MSW
+  if (import.meta.env.VITE_DISABLE_MOCKS === 'true' || Boolean(import.meta.env.VITE_API_URL)) {
     return;
   }
 
-  const { worker } = await import('./mocks/browser');
-  return worker.start({
-    onUnhandledRequest: 'bypass',
-  });
+  try {
+    const { worker } = await import('./mocks/browser');
+    await worker.start({
+      serviceWorker: {
+        url: '/mockServiceWorker.js',
+      },
+      onUnhandledRequest: 'bypass',
+    });
+  } catch (error) {
+    console.warn('[MSW] Failed to start Mock Service Worker:', error);
+  }
 }
 
-enableMocking().then(() => {
+enableMocking().catch(console.error).then(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryProvider>

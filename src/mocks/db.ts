@@ -1,11 +1,59 @@
 import type { Booking, CreateBookingDTO, UpdateBookingDTO } from '../entities/booking';
 import { formatDateToISO } from '../entities/booking';
 
+const STORAGE_KEY = 'meeting_room_bookings_db_v1';
+
 class BookingDatabase {
   private bookings: Booking[] = [];
   private idCounter = 1;
 
   constructor() {
+    this.init();
+  }
+
+  private canUseStorage(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  }
+
+  private loadFromStorage(): Booking[] | null {
+    if (!this.canUseStorage()) return null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Ignore corrupted storage
+    }
+    return null;
+  }
+
+  private saveToStorage(): void {
+    if (!this.canUseStorage()) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bookings));
+    } catch {
+      // Ignore storage errors (quota, etc.)
+    }
+  }
+
+  private extractIdNumber(id: string): number {
+    const parts = id.split('-');
+    const lastPart = parts[parts.length - 1];
+    const num = parseInt(lastPart, 10);
+    return isNaN(num) ? 1 : num;
+  }
+
+  private init(): void {
+    const saved = this.loadFromStorage();
+    if (saved && saved.length > 0) {
+      this.bookings = saved;
+      const maxId = Math.max(10, ...saved.map((b) => this.extractIdNumber(b.id) + 1));
+      this.idCounter = maxId;
+      return;
+    }
     this.seedInitialData();
   }
 
@@ -15,6 +63,13 @@ class BookingDatabase {
   public resetDb(): void {
     this.bookings = [];
     this.idCounter = 1;
+    if (this.canUseStorage()) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   /**
@@ -74,6 +129,7 @@ class BookingDatabase {
     ];
 
     this.idCounter = 10;
+    this.saveToStorage();
   }
 
   public getBookingsByDate(date: string): Booking[] {
@@ -95,6 +151,7 @@ class BookingDatabase {
       title: dto.title?.trim() || undefined,
     };
     this.bookings.push(newBooking);
+    this.saveToStorage();
     return newBooking;
   }
 
@@ -115,13 +172,18 @@ class BookingDatabase {
     };
 
     this.bookings[index] = updated;
+    this.saveToStorage();
     return updated;
   }
 
   public deleteBooking(id: string): boolean {
     const initialLength = this.bookings.length;
     this.bookings = this.bookings.filter((b) => b.id !== id);
-    return this.bookings.length !== initialLength;
+    const deleted = this.bookings.length !== initialLength;
+    if (deleted) {
+      this.saveToStorage();
+    }
+    return deleted;
   }
 }
 

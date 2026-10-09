@@ -48,6 +48,7 @@ npm run dev
 - `npm run test` — запуск всех тестов (Unit, Integration, E2E) через Vitest.
 - `npm run typecheck` — проверка типов TypeScript.
 - `npm run build` — сборка production-бандла.
+- `npm run preview` — локальный запуск собранного production-бандла с проверкой API.
 
 ## Стек технологий
 
